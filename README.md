@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="obsidian://show-plugin?id=inline-comments"><b>Install in Obsidian</b></a> ·
-  <a href="https://obsidian-inline-comments.vercel.app/en/">Website</a> ·
+  <a href="https://agent-comments.yytyyf.com/en/">Website</a> ·
   <a href="#中文">中文说明 ↓</a>
 </p>
 
@@ -112,7 +112,7 @@ Design notes live in [`DESIGN.md`](DESIGN.md). Releases are built by CI from a v
 
 **安装**：Obsidian 设置 → 第三方插件 → 浏览，搜 **Agent Comments**；或直接打开 <a href="obsidian://show-plugin?id=inline-comments">obsidian://show-plugin?id=inline-comments</a>。Obsidian 1.8 以上，桌面与手机；会话发现、hook、「用新会话回答」（开终端）是桌面能力，最后一项目前仅 macOS。预发布版用 BRAT 添加 `IvyYang1999/obsidian-inline-comments`。
 
-官网中文版：https://obsidian-inline-comments.vercel.app
+官网中文版：https://agent-comments.yytyyf.com
 
 **关于隐私**：插件本身不联网。@ 只是往你电脑上的一个文件夹写一个文件，会话在你自己的终端里跑；首次 @ 需要在「管理成员」里点一次「安装 hook」——它只往 `~/.claude/settings.json` 加三条，可一键卸载。
 
