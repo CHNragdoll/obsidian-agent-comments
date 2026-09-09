@@ -1,9 +1,9 @@
 {
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "has": [{ "type": "host", "value": "obsidian-inline-comments.vercel.app" }],
-      "destination": "https://agent-comments.yytyyf.com/:path*",
+      "destination": "https://agent-comments.yytyyf.com/$1",
       "permanent": true
     }
   ]
