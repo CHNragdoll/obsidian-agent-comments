@@ -1,7 +1,7 @@
 {
   "id": "inline-comments",
   "name": "Agent Comments",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "minAppVersion": "1.8.0",
   "description": "Comments alongside your notes, stored as plain text in the Markdown. Works on its own; @ an AI coding agent (Claude Code / Codex) and it replies in place, or proposes an edit you can accept.",
   "author": "yytyyf",

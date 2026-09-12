@@ -1,6 +1,6 @@
 {
   "name": "obsidian-inline-comments",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Agent Comments: comments alongside your Obsidian notes; @ an AI coding agent to reply",
   "main": "main.js",
   "scripts": {
