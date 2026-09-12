@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Sitemap: https://agent-comments.yytyyf.com/sitemap.xml
