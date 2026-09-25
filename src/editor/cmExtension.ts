@@ -8,7 +8,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
-import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
+import { RangeSetBuilder, StateEffect, StateField, type EditorState } from '@codemirror/state';
 import { isResolved, parseAnnotations } from '../parser.ts';
 import type { Annotation } from '../types.ts';
 
@@ -100,7 +100,6 @@ function highlightClass(ann: Annotation): string {
 // ─── Main ViewPlugin class ───────────────────────────────────────────────────
 
 class CommentViewPlugin implements PluginValue {
-  decorations: DecorationSet = Decoration.none;
   private scrollRAF = 0;
   private view: EditorView;
   private onScroll: () => void;
@@ -110,7 +109,6 @@ class CommentViewPlugin implements PluginValue {
     private host: ICommentHost,
   ) {
     this.view = view;
-    this.decorations = this.buildDecorations(view);
 
     // Scroll listener on the editor's scroll container (throttled via rAF)
     this.onScroll = () => {
@@ -143,10 +141,6 @@ class CommentViewPlugin implements PluginValue {
   }
 
   update(update: ViewUpdate): void {
-    if (update.docChanged || update.viewportChanged) {
-      this.decorations = this.buildDecorations(update.view);
-    }
-
     // Emit position updates when geometry or content changes
     if (update.docChanged || update.viewportChanged || update.geometryChanged) {
       this.requestPositions(update.view);
@@ -197,67 +191,68 @@ class CommentViewPlugin implements PluginValue {
     this.host.onPositionsUpdated(positions, view);
   }
 
-  // ── Decorations ────────────────────────────────────────────────────────────
+}
 
-  private buildDecorations(view: EditorView): DecorationSet {
-    const builder = new RangeSetBuilder<Decoration>();
-    const content = view.state.doc.toString();
-    const anns = parseAnnotations(content);
+// Replacement ranges can span lines. They must be supplied directly from a
+// StateField, before CodeMirror computes its viewport (not from a ViewPlugin).
+function buildDecorations(state: EditorState, host: ICommentHost): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  const content = state.doc.toString();
+  const anns = parseAnnotations(content);
 
-    // RangeSetBuilder requires ranges to be added in document order and must
-    // never see overlapping replace ranges — one malformed/nested annotation
-    // would otherwise throw and CM6 would disable every decoration in the file.
-    anns.sort((a, b) => a.from - b.from);
-    const onBadgeClick = (id: string) => {
-      try { this.host.onBadgeClick?.(id); } catch { /* panel may not be ready */ }
-    };
+  // RangeSetBuilder requires ranges to be added in document order and must
+  // never see overlapping replace ranges — one malformed/nested annotation
+  // would otherwise throw and CM6 would disable every decoration in the file.
+  anns.sort((a, b) => a.from - b.from);
+  const onBadgeClick = (id: string) => {
+    try { host.onBadgeClick?.(id); } catch { /* panel may not be ready */ }
+  };
 
-    let lastEnd = -1;
-    for (const ann of anns) {
-      if (ann.from < lastEnd) continue; // overlaps the previous annotation — skip, don't crash
-      const raw = content.slice(ann.from, ann.to);
+  let lastEnd = -1;
+  for (const ann of anns) {
+    if (ann.from < lastEnd) continue; // overlaps the previous annotation — skip, don't crash
+    const raw = content.slice(ann.from, ann.to);
 
-      const hlStart    = ann.from + 3;                         // skip {==
-      const eqIdx      = raw.indexOf('==}');
-      if (eqIdx < 0) continue;
-      const hlEnd      = ann.from + eqIdx;                     // end of highlight text
-      const markupEnd  = ann.to;
-      if (hlEnd < hlStart || markupEnd < hlEnd) continue;
+    const hlStart    = ann.from + 3;                         // skip {==
+    const eqIdx      = raw.indexOf('==}');
+    if (eqIdx < 0) continue;
+    const hlEnd      = ann.from + eqIdx;                     // end of highlight text
+    const markupEnd  = ann.to;
+    if (hlEnd < hlStart || markupEnd < hlEnd) continue;
 
-      const cls = highlightClass(ann) + (isResolved(ann) ? ' ilc-hl-resolved' : '');
-      const bg = isResolved(ann) ? null : this.host.highlightBg?.(ann.comments[0]?.type ?? 'note');
+    const cls = highlightClass(ann) + (isResolved(ann) ? ' ilc-hl-resolved' : '');
+    const bg = isResolved(ann) ? null : host.highlightBg?.(ann.comments[0]?.type ?? 'note');
 
-      try {
-        // 1. Hide the `{==` prefix
-        builder.add(ann.from, hlStart, Decoration.replace({}));
+    try {
+      // 1. Hide the `{==` prefix
+      builder.add(ann.from, hlStart, Decoration.replace({}));
 
-        // 2. Mark the highlighted text with color
-        if (hlStart < hlEnd) {
-          builder.add(
-            hlStart,
-            hlEnd,
-            Decoration.mark({ class: `ilc-highlight ${cls}`, attributes: bgAttrs(bg) }),
-          );
-        }
-
-        // 3. Replace `==}{>>...<<}` with badge widget
-        if (hlEnd < markupEnd) {
-          builder.add(
-            hlEnd,
-            markupEnd,
-            Decoration.replace({
-              widget: new CommentBadgeWidget(ann.comments.filter((c) => c.type !== 'resolve' && c.type !== 'react').length, ann.id, onBadgeClick),
-            }),
-          );
-        }
-        lastEnd = markupEnd;
-      } catch {
-        // malformed range — skip this annotation only
+      // 2. Mark the highlighted text with color
+      if (hlStart < hlEnd) {
+        builder.add(
+          hlStart,
+          hlEnd,
+          Decoration.mark({ class: `ilc-highlight ${cls}`, attributes: bgAttrs(bg) }),
+        );
       }
-    }
 
-    return builder.finish();
+      // 3. Replace `==}{>>...<<}` with badge widget
+      if (hlEnd < markupEnd) {
+        builder.add(
+          hlEnd,
+          markupEnd,
+          Decoration.replace({
+            widget: new CommentBadgeWidget(ann.comments.filter((c) => c.type !== 'resolve' && c.type !== 'react').length, ann.id, onBadgeClick),
+          }),
+        );
+      }
+      lastEnd = markupEnd;
+    } catch {
+      // malformed range — skip this annotation only
+    }
   }
+
+  return builder.finish();
 }
 
 // ─── Draft range: temporary highlight while a comment is being written ───────
@@ -298,10 +293,15 @@ export const draftRangeField = StateField.define<DecorationSet>({
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
 export function buildCommentExtension(host: ICommentHost) {
+  const comments = StateField.define<DecorationSet>({
+    create: state => buildDecorations(state, host),
+    update: (deco, tr) => tr.docChanged || tr.reconfigured ? buildDecorations(tr.state, host) : deco,
+    provide: field => EditorView.decorations.from(field),
+  });
   return [
+    comments,
     ViewPlugin.define(
       (view) => new CommentViewPlugin(view, host),
-      { decorations: (v) => v.decorations },
     ),
     draftRangeField,
   ];

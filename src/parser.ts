@@ -18,11 +18,13 @@ const BLOCK_RE = /\{>>([\s\S]+?)<<\}/g;
 function parseMeta(raw: string): CommentEntry {
   const m = raw.match(/^([^|]+)\|([^|]+)\|([^:]+):\s*([\s\S]*)$/);
   if (m) {
+    const receipt = m[4].match(/\n<!-- ilc-codex:([a-f0-9]{40}) -->\s*$/);
     return {
       author: m[1].trim(),
       date:   m[2].trim(),
       type:   m[3].trim() as CommentType,
-      text:   m[4].trim(),
+      text:   (receipt ? m[4].slice(0, receipt.index) : m[4]).trim(),
+      ...(receipt ? { replyId: receipt[1] } : {}),
     };
   }
   // Legacy fallback: "author|date: text"
@@ -77,7 +79,7 @@ export function buildAnnotationMarkup(
   const blocks = comments
     .map(
       (c) =>
-        `{>>${c.author}|${c.date}|${c.type}: ${escapeBody(c.text)}<<}`,
+        commentBlock(c),
     )
     .join('');
   return `{==${highlightText}==}${blocks}`;
@@ -98,7 +100,7 @@ export function appendReply(
   while ((m = FULL_RE.exec(content)) !== null) {
     if (m.index === annotationFrom) {
       const insertPos = m.index + m[0].length;
-      const block = `{>>${reply.author}|${reply.date}|${reply.type}: ${escapeBody(reply.text)}<<}`;
+      const block = commentBlock(reply);
       return content.slice(0, insertPos) + block + content.slice(insertPos);
     }
   }
@@ -108,6 +110,12 @@ export function appendReply(
 /** Escape `<<` and `>>` inside a comment body to prevent parser confusion */
 function escapeBody(text: string): string {
   return text.replace(/<</g, '‹‹').replace(/>>/g, '››');
+}
+
+function commentBlock(c: CommentEntry): string {
+  const receipt = c.replyId && /^[a-f0-9]{40}$/.test(c.replyId)
+    ? `\n<!-- ilc-codex:${c.replyId} -->` : '';
+  return `{>>${c.author}|${c.date}|${c.type}: ${escapeBody(c.text)}${receipt}<<}`;
 }
 
 /**

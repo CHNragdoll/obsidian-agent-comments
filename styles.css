@@ -1310,3 +1310,9 @@ body {
 .ilc-react-picker.is-open { display: flex; }
 .ilc-panel .ilc-react-option { border: 0 !important; font-size: 15px; padding: 0 5px !important; height: 26px !important; line-height: 26px; }
 .ilc-panel .ilc-react-option:hover { background: var(--ilc-surface-sunken) !important; }
+.ilc-codex-recovery-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow-y: auto;
+}

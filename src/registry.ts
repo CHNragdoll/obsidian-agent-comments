@@ -39,6 +39,7 @@ export async function readRegistry(app: App): Promise<RegistryFile> {
 }
 
 export async function writeRegistry(app: App, data: RegistryFile): Promise<void> {
+  if (!(await app.vault.adapter.exists('_os'))) await app.vault.adapter.mkdir('_os');
   await app.vault.adapter.write(REGISTRY_PATH, JSON.stringify(data, null, 2));
 }
 

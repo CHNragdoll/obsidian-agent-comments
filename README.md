@@ -69,10 +69,12 @@ Obsidian 1.8+, desktop and mobile. Session discovery, the hook, and *Answer with
 </p>
 
 1. **Manage members** (from the `@` dropdown or the settings tab) lists the Claude Code / Codex sessions running on this machine. Give one a name to make it mentionable — or just `@` a name that doesn't exist yet and the plugin creates the session for you.
-2. **Install hook**, once. It adds three entries (`UserPromptSubmit`, `Stop`, `SessionStart`) to `~/.claude/settings.json`, backs the file up first, touches nothing else, and *Uninstall* removes exactly those entries.
+2. **For Claude Code: install hook**, once. It adds three entries (`UserPromptSubmit`, `Stop`, `SessionStart`) to `~/.claude/settings.json`, backs the file up first, touches nothing else, and *Uninstall* removes exactly those entries.
 3. Write `@Name` in a comment and send. The letter lands in `<vault>/<mailbox root>/<session-id-prefix>/`; the session sees it the next time it speaks or finishes, reads the note, and appends a reply.
 
-The plugin never talks to the network. Letters and replies are local files in your vault; what your AI tool does with them is up to that tool.
+**Codex automatic replies (optional, desktop):** register an existing Codex task, configure the CLI path, then enable **Codex automatic replies**. A notifying mention queues a message to that task and the plugin appends the validated answer to the original thread. Requires a signed-in CLI with `codex queue` support; Claude hooks are not needed. [Setup, recovery and privacy details](docs/codex-auto-replies.md).
+
+The plugin stores letters and replies locally and makes no direct model API calls. Enabled agent integrations pass comment context to your local AI tool, which may send it to its configured provider.
 
 The UI follows Obsidian's language (English or 中文); you can pin either in settings.
 
@@ -114,6 +116,8 @@ Design notes live in [`DESIGN.md`](DESIGN.md). Releases are built by CI from a v
 
 官网中文版：https://agent-comments.yytyyf.com
 
-**关于隐私**：插件本身不联网。@ 只是往你电脑上的一个文件夹写一个文件，会话在你自己的终端里跑；首次 @ 需要在「管理成员」里点一次「安装 hook」——它只往 `~/.claude/settings.json` 加三条，可一键卸载。
+**Codex 自动回复（可选，桌面端）**：在“管理评论 @ 成员”中绑定任务，设置 CLI 路径并开启“Codex 自动回复”。带“通知对方”的评论会唤醒该任务，回答由插件校验后写回原线程。需 CLI 支持 `codex queue`，不需要 Claude hook。[配置与故障恢复说明](docs/codex-auto-replies.md)。
+
+**关于隐私**：插件把信件和回复保存在本地，不直接调用模型 API。开启 Agent 联动后，评论上下文会交给本机 AI 工具，由该工具按自身配置发送给模型服务。Claude Code 路线可选安装其 hook；Codex 自动回复使用目标任务已有的模型、权限和额度。
 
 作者 [yytyyf](https://yytyyf.com) · MIT

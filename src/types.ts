@@ -6,6 +6,8 @@ export interface CommentEntry {
   date:   string;
   type:   CommentType;
   text:   string;
+  /** Hidden receipt for idempotent Codex writeback. */
+  replyId?: string;
 }
 
 export interface Annotation {

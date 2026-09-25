@@ -73,6 +73,7 @@ function stripMarkdown(text: string): string {
 // ─── Panel ───────────────────────────────────────────────────────────────────
 
 export class CommentPanel extends ItemView {
+  private refreshGeneration = 0;
   private annotations: Annotation[] = [];
   private activeAnnotationId: string | null = null;
   private cardEls: Map<string, HTMLElement> = new Map();
@@ -264,6 +265,7 @@ export class CommentPanel extends ItemView {
 
   async refresh(): Promise<void> {
     if (!this.cardsZone) return;
+    const generation = ++this.refreshGeneration;
 
     // Preserve draft element if it exists
     const hadDraft = !!this.draft;
@@ -289,6 +291,7 @@ export class CommentPanel extends ItemView {
     }
 
     const content = await this.app.vault.read(file);
+    if (generation !== this.refreshGeneration || this.app.workspace.getActiveFile()?.path !== file.path) return;
     this.annotations = parseAnnotations(content);
 
     if (this.annotations.length === 0 && !this.draft) {
