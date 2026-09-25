@@ -1,5 +1,5 @@
 import { statusLabel, t } from '../i18n.ts';
-import { App, Modal, Notice, Platform } from 'obsidian';
+import { App, Modal, Notice, Platform, Setting } from 'obsidian';
 import { loadRoster, type RosterEntry } from '../atSelector.ts';
 import { readRegistry, removeAgent, upsertAgent, validateName } from '../registry.ts';
 import { discoverLocalSessions, shortCwd, timeAgo, type LocalSession } from '../sessionDiscovery.ts';
@@ -83,7 +83,7 @@ export class MembersModal extends Modal {
     return (this.app as any).plugins?.plugins?.['inline-comments'];
   }
 
-  /** "投递 … · 唤醒 hook …" line with an install button when needed */
+  /** Separate mailbox delivery, Codex dispatch and Claude hooks. */
   private async renderDeliveryStatus(el: HTMLElement): Promise<void> {
     el.empty();
     const plugin = this.plugin;
@@ -95,16 +95,33 @@ export class MembersModal extends Modal {
         ? t('投递：已开启 · 信箱 {0}{1}', [root, exists ? '' : '（首次投信时自动创建）'])
         : t('投递：已关闭（设置里可开启）'),
     });
+    if (plugin) {
+      new Setting(el)
+        .setName(t('Codex 自动回复'))
+        .setDesc(t('通过 Codex 任务自动回复，不需要 Claude hook。需开启信箱投递，并在评论中勾选「通知对方」。仅桌面端可用。'))
+        .addToggle(toggle => toggle.setDisabled(!Platform.isDesktop)
+          .setValue(plugin.settings.enableCodexAutoReply ?? false)
+          .onChange(async value => {
+            plugin.settings.enableCodexAutoReply = value;
+            await plugin.saveSettings();
+          }))
+        .addButton(button => button.setButtonText(t('查看状态')).onClick(() => plugin.codexReplies.showStatus()));
+    }
+    const claude = el.createEl('div');
+    claude.createEl('strong', { text: t('唤醒 hook（Claude Code）') });
+    claude.appendText(' · ');
     const st = await plugin?.hookStatus?.();
-    if (!st) return;
-    el.appendText(t(' · 唤醒 hook：'));
-    if (st.installed && !st.stale) {
-      el.createEl('span', { cls: 'ilc-members-ok', text: t('已安装') });
-      el.setAttribute('title', t('会话说话前 / 收尾时 / 恢复时自动收到留言 · {0}', [st.settingsPath]));
+    if (!st) {
+      claude.appendText(t('仅桌面端可用。'));
       return;
     }
-    el.createEl('span', { cls: 'ilc-members-warn', text: st.installed ? t('需要重装') : t('未安装') });
-    const btn = el.createEl('button', { cls: 'ilc-members-join', text: st.installed ? t('重装') : t('安装') });
+    if (st.installed && !st.stale) {
+      claude.createEl('span', { cls: 'ilc-members-ok', text: t('已安装') });
+      claude.setAttribute('title', t('会话说话前 / 收尾时 / 恢复时自动收到留言 · {0}', [st.settingsPath]));
+      return;
+    }
+    claude.createEl('span', { cls: 'ilc-members-warn', text: st.installed ? t('需要重装') : t('未安装') });
+    const btn = claude.createEl('button', { cls: 'ilc-members-join', text: st.installed ? t('重装') : t('安装') });
     btn.setAttribute('title', t('写入 {0}（只加自己的条目，先备份）', [st.settingsPath]));
     btn.addEventListener('click', async () => {
       await plugin.installHooks();
@@ -112,7 +129,7 @@ export class MembersModal extends Modal {
     });
     el.createEl('div', {
       cls: 'ilc-members-warn-hint',
-      text: t('没有 hook 时信照样会投到信箱，但会话不会自动看到，得它自己去读。'),
+      text: t('此 hook 仅用于 Claude Code；未安装时 Claude 需自行读取信箱。Codex 自动回复由上方开关独立控制。'),
     });
   }
 

@@ -149,3 +149,5 @@ A community-plugin update may replace a locally installed fork build.
 此功能默认关闭，只自动处理开启后新投递的通知；历史已投递信件不会自动补发。
 它使用 Codex 任务当前的模型、权限和额度，不需要安装 Claude hook。请只在一个
 桌面端启用同一 Vault 的自动回复。
+
+The Members dialog also exposes the same Codex automatic reply toggle and status view. Claude Code hook installation is shown separately and is not required for Codex.

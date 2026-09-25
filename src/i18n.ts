@@ -29,6 +29,9 @@ export function statusLabel(status: string): string {
 }
 
 const EN: Record<string, string> = {
+  '查看状态': 'View status',
+  '通过 Codex 任务自动回复，不需要 Claude hook。需开启信箱投递，并在评论中勾选「通知对方」。仅桌面端可用。': 'Replies through a Codex task without Claude hooks. Enable mailbox delivery and select Notify when mentioning a member. Desktop only.',
+  '此 hook 仅用于 Claude Code；未安装时 Claude 需自行读取信箱。Codex 自动回复由上方开关独立控制。': 'This hook is only for Claude Code. Without it, Claude must read the mailbox itself. Codex automatic replies are controlled independently by the toggle above.',
   'Codex 自动回复': 'Codex automatic replies',
   '重试未发送的请求': 'Retry unsent request',
   'Codex CLI 路径': 'Codex CLI path',
