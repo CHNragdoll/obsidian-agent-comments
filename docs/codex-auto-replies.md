@@ -167,7 +167,7 @@ sequenceDiagram
 
 Change type: **feature**. Risk: **R3**, because enabling it dispatches comment
 context to an AI task and writes replies into the vault. The contribution targets
-an upstream PR after local review and explicit user authorization. It does not change the plugin ID, author, version or release flow.
+an upstream PR after local review and explicit user authorization. The proposed version is 0.2.4; the plugin ID, author and release flow are unchanged. The maintainer controls merge and publication.
 
 Automated checks:
 
