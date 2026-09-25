@@ -65,6 +65,7 @@ interface ILCSettings {
   /** Deliver `[@名字](agent:id?notify)` mentions as mailbox letters (in-plugin scanner) */
   enableMentionDelivery: boolean;
   enableCodexAutoReply: boolean;
+  enableCodexVaultResearch: boolean;
   codexExecutable: string;
   /** Vault-relative mailbox root; letters go to <root>/<短id>/ */
   mailboxRoot: string;
@@ -86,6 +87,7 @@ const DEFAULT_SETTINGS: ILCSettings = {
   panelBackgroundColor: '#f4f4f2',
   enableMentionDelivery: true,
   enableCodexAutoReply: false,
+  enableCodexVaultResearch: false,
   codexExecutable: 'codex',
   mailboxRoot: DEFAULT_MAILBOX_ROOT,
   showResolved: true,
@@ -217,8 +219,10 @@ export default class InlineCommentsPlugin extends Plugin implements ICommentHost
       (msg) => new Notice(msg),
       async (c, relPath, letterPath, context) => {
         if (c.harness === 'codex' && this.settings.enableCodexAutoReply && Platform.isDesktop) {
+          const known = new Set((await this.codexReplies.engine.snapshot()).map(job => job.id));
+          const predecessors = context.predecessors?.filter(id => known.has(id) || this.mentionDelivery.hasPending(id));
           await this.codexReplies.enqueue({ id: context.key, sessionId: c.sessionId, agentName: c.name,
-            notePath: relPath, letterPath, highlight: context.highlight, comment: context.comment });
+            notePath: relPath, letterPath, highlight: context.highlight, comment: context.comment, context: context.snapshot, predecessors });
           return;
         }
         this.notifyDesktop(t('评论区有新留言给 {0}', [c.name]), t('{0} · 它下一次说话/收尾时会看到', [relPath.split('/').pop()]));
@@ -226,6 +230,11 @@ export default class InlineCommentsPlugin extends Plugin implements ICommentHost
       },
     );
     this.mentionDelivery.init();
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+      if (file instanceof TFile && file.extension === 'md') {
+        void Promise.all([this.codexReplies.engine.renameNote(oldPath, file.path), this.mentionDelivery.renameNote(oldPath, file.path)]).catch(error => new Notice(String(error)));
+      }
+    }));
 
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
@@ -1067,9 +1076,15 @@ class ILCSettingTab extends PluginSettingTab {
       );
     new Setting(containerEl)
       .setName(t('Codex 自动回复'))
-      .setDesc(t('仅桌面端。将新投递的 Codex 通知发送到成员绑定的任务，使用该任务的模型与额度，再写回原评论。需本机已登录且支持 codex queue；只发送选中原文及评论。关闭时暂停发送和写回。'))
+      .setDesc(t('仅桌面端。将新投递的 Codex 通知发送到成员绑定的任务，使用该任务的模型与额度，再写回原评论。需本机已登录且支持 codex queue；发送选中原文、本次评论、附近正文和本线程此前的讨论，超长内容会截断并标注。关闭时暂停发送和写回。'))
       .addToggle(toggle => toggle.setDisabled(!Platform.isDesktop).setValue(this.plugin.settings.enableCodexAutoReply).onChange(async value => {
         this.plugin.settings.enableCodexAutoReply = value;
+        await this.plugin.saveSettings();
+      }));
+    new Setting(containerEl).setName(t('Codex 跨笔记查找'))
+      .setDesc(t('允许新评论请求按需读取当前 Vault 的 Markdown、追踪链接和搜索来源；回答附来源与摘录。读取的内容会进入当前 Codex 任务及其模型服务。使用任务现有权限，范围由提示词约束，并非独立沙箱。关闭后阻止尚未发送的查找请求，已排队请求仍可能继续。'))
+      .addToggle(toggle => toggle.setValue(this.plugin.settings.enableCodexVaultResearch).onChange(async value => {
+        this.plugin.settings.enableCodexVaultResearch = value;
         await this.plugin.saveSettings();
       }));
     new Setting(containerEl).setName(t('Codex CLI 路径'))
@@ -1077,6 +1092,12 @@ class ILCSettingTab extends PluginSettingTab {
       .addText(input => input.setPlaceholder('codex').setValue(this.plugin.settings.codexExecutable).onChange(async value => {
         this.plugin.settings.codexExecutable = value.trim() || 'codex';
         await this.plugin.saveSettings();
+      }));
+    new Setting(containerEl).setName(t('检查 Codex CLI'))
+      .setDesc(t('检查本机命令是否支持自动回复，不发送评论。'))
+      .addButton(button => button.setButtonText(t('检查')).onClick(async () => {
+        try { await this.plugin.codexReplies.checkSetup(); new Notice(t('Codex CLI 检查通过')); }
+        catch (error) { new Notice(String((error as Error).message ?? error)); }
       }));
     new Setting(containerEl).setName(t('Codex 自动回复状态'))
       .addButton(button => button.setButtonText(t('查看')).onClick(() => this.plugin.codexReplies.showStatus()));

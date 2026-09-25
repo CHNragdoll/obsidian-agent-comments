@@ -72,7 +72,7 @@ Obsidian 1.8+, desktop and mobile. Session discovery, the hook, and *Answer with
 2. **For Claude Code: install hook**, once. It adds three entries (`UserPromptSubmit`, `Stop`, `SessionStart`) to `~/.claude/settings.json`, backs the file up first, touches nothing else, and *Uninstall* removes exactly those entries.
 3. Write `@Name` in a comment and send. The letter lands in `<vault>/<mailbox root>/<session-id-prefix>/`; the session sees it the next time it speaks or finishes, reads the note, and appends a reply.
 
-**Codex automatic replies (optional, desktop):** register an existing Codex task, configure the CLI path, then enable **Codex automatic replies**. A notifying mention queues a message to that task and the plugin appends the validated answer to the original thread. Requires a signed-in CLI with `codex queue` support; Claude hooks are not needed. [Setup, recovery and privacy details](docs/codex-auto-replies.md).
+**Codex automatic replies (optional, desktop):** register an existing Codex task, configure the CLI path, then enable **Codex automatic replies**. A notifying mention sends the quote, current question, nearby note prose and prior discussion to that task; the plugin appends the validated answer to the original thread. Requires a signed-in CLI with `codex queue` support; Claude hooks are not needed. [Setup, recovery and privacy details](docs/codex-auto-replies.md).
 
 The plugin stores letters and replies locally and makes no direct model API calls. Enabled agent integrations pass comment context to your local AI tool, which may send it to its configured provider.
 
@@ -116,7 +116,9 @@ Design notes live in [`DESIGN.md`](DESIGN.md). Releases are built by CI from a v
 
 官网中文版：https://agent-comments.yytyyf.com
 
-**Codex 自动回复（可选，桌面端）**：在“管理评论 @ 成员”中绑定任务，设置 CLI 路径并开启“Codex 自动回复”。带“通知对方”的评论会唤醒该任务，回答由插件校验后写回原线程。需 CLI 支持 `codex queue`，不需要 Claude hook。[配置与故障恢复说明](docs/codex-auto-replies.md)。
+**Codex 自动回复（可选，桌面端）**：在“管理评论 @ 成员”中绑定任务，设置 CLI 路径并开启“Codex 自动回复”。带“通知对方”的评论会携带原文、附近正文和本线程历史讨论唤醒该任务，回答由插件校验后写回原线程。需 CLI 支持 `codex queue`，不需要 Claude hook。[配置与故障恢复说明](docs/codex-auto-replies.md)。
+
+**跨笔记溯源（Codex，可选）**：设置中开启“Codex 跨笔记查找”后，新评论可按需读取关联笔记、沿双链/块引用或搜索 Markdown；回答附经过路径及原文摘录核对的来源链接。相同数字只作为候选依据，不能自动证明引用关系。读取使用目标任务现有权限与提示词约束，不是独立沙箱。详见 [使用说明](docs/codex-auto-replies.md#optional-cross-note-research)。
 
 **关于隐私**：插件把信件和回复保存在本地，不直接调用模型 API。开启 Agent 联动后，评论上下文会交给本机 AI 工具，由该工具按自身配置发送给模型服务。Claude Code 路线可选安装其 hook；Codex 自动回复使用目标任务已有的模型、权限和额度。
 

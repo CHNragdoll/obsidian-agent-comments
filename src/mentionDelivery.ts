@@ -38,8 +38,8 @@ export interface Candidate {
 }
 
 /** Same key as the python scanner: sha1(relative_path + highlight + content + short_id) */
-export async function mentionKey(relPath: string, highlight: string, content: string, shortId: string): Promise<string> {
-  const data = new TextEncoder().encode(relPath + highlight + content + shortId);
+export async function mentionKey(relPath: string, highlight: string, content: string, shortId: string, commentId?: string): Promise<string> {
+  const data = new TextEncoder().encode(commentId ? JSON.stringify(['v2', commentId, shortId]) : relPath + highlight + content + shortId);
   const digest = await crypto.subtle.digest('SHA-1', data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

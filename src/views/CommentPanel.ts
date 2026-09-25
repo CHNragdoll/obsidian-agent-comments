@@ -732,6 +732,7 @@ export class CommentPanel extends ItemView {
         date:   today,
         type:   this.draft.selectedType,
         text:   inputValue.trim(),
+        commentId: crypto.randomUUID(),
       },
     ];
 
@@ -895,7 +896,7 @@ export class CommentPanel extends ItemView {
       const text = input.value.trim();
       if (!text) return;
       const today = new Date().toISOString().split('T')[0];
-      const reply: CommentEntry = { author: this.plugin.settings.authorName, date: today, type: suggestBox.checked ? 'suggest' : 'reply', text };
+      const reply: CommentEntry = { author: this.plugin.settings.authorName, date: today, type: suggestBox.checked ? 'suggest' : 'reply', text, commentId: crypto.randomUUID() };
       const currentContent = await this.app.vault.read(file);
       await this.app.vault.modify(file, appendReply(currentContent, ann.from, reply));
     });
@@ -1080,6 +1081,15 @@ export class CommentPanel extends ItemView {
    */
   private renderCommentText(container: HTMLElement, text: string, sourcePath: string): void {
     void MarkdownRenderer.render(this.app, text, container, sourcePath, this).then(() => {
+      for (const a of Array.from(container.querySelectorAll<HTMLAnchorElement>('a.internal-link'))) {
+        a.addEventListener('click', event => {
+          const link = a.getAttribute('data-href') ?? a.getAttribute('href');
+          if (!link || /^[a-z][a-z0-9+.-]*:/i.test(link)) return;
+          event.preventDefault();
+          event.stopPropagation(); // Do not let the card jump back to its original anchor.
+          void this.app.workspace.openLinkText(link, sourcePath, event.metaKey || event.ctrlKey);
+        });
+      }
       for (const a of Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href^="agent:"]'))) {
         const isNotify = a.getAttribute('href')?.includes('?notify') ?? false;
         const span = createSpan({ cls: `ilc-mention${isNotify ? ' ilc-mention-notify' : ''}`, text: a.textContent ?? '' });

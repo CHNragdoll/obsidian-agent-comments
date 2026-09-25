@@ -8,6 +8,8 @@ export interface CommentEntry {
   text:   string;
   /** Hidden receipt for idempotent Codex writeback. */
   replyId?: string;
+  /** Stable identity for notifying comments. */
+  commentId?: string;
 }
 
 export interface Annotation {

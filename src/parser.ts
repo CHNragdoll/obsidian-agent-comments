@@ -1,3 +1,4 @@
+import { parser as markdownParser } from '@lezer/markdown';
 import type { Annotation, CommentEntry, CommentType } from './types.ts';
 
 /**
@@ -16,56 +17,46 @@ const BLOCK_RE = /\{>>([\s\S]+?)<<\}/g;
  * Falls back to type=note if format doesn't match.
  */
 function parseMeta(raw: string): CommentEntry {
-  const m = raw.match(/^([^|]+)\|([^|]+)\|([^:]+):\s*([\s\S]*)$/);
-  if (m) {
-    const receipt = m[4].match(/\n<!-- ilc-codex:([a-f0-9]{40}) -->\s*$/);
-    return {
-      author: m[1].trim(),
-      date:   m[2].trim(),
-      type:   m[3].trim() as CommentType,
-      text:   (receipt ? m[4].slice(0, receipt.index) : m[4]).trim(),
-      ...(receipt ? { replyId: receipt[1] } : {}),
-    };
-  }
-  // Legacy fallback: "author|date: text"
-  const m2 = raw.match(/^([^|]+)\|([^:]+):\s*([\s\S]*)$/);
-  if (m2) {
-    return {
-      author: m2[1].trim(),
-      date:   m2[2].trim(),
-      type:   'note',
-      text:   m2[3].trim(),
-    };
-  }
-  return { author: 'unknown', date: '', type: 'note', text: raw.trim() };
+  const metadata = raw.match(/(?:\n<!-- ilc-(?:codex:[a-f0-9]{40}|comment:[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}) -->)+\s*$/)?.[0];
+  const body = metadata ? raw.slice(0, -metadata.length) : raw;
+  const replyId = metadata?.match(/ilc-codex:([a-f0-9]{40})/)?.[1];
+  const commentId = metadata?.match(/ilc-comment:([a-f0-9-]{36})/)?.[1];
+  const identity = { ...(replyId ? { replyId } : {}), ...(commentId ? { commentId } : {}) };
+  const modern = body.match(/^([^|]+)\|([^|]+)\|([^:]+):\s*([\s\S]*)$/);
+  if (modern) return { author: modern[1].trim(), date: modern[2].trim(), type: modern[3].trim(), text: modern[4].trim(), ...identity };
+  const legacy = body.match(/^([^|]+)\|([^:]+):\s*([\s\S]*)$/);
+  if (legacy) return { author: legacy[1].trim(), date: legacy[2].trim(), type: 'note', text: legacy[3].trim(), ...identity };
+  return { author: 'unknown', date: '', type: 'note', text: body.trim(), ...identity };
 }
 
 /** Parse all annotations from raw document content */
 export function parseAnnotations(content: string): Annotation[] {
   const results: Annotation[] = [];
-  let m: RegExpExecArray | null;
-  FULL_RE.lastIndex = 0;
-
-  while ((m = FULL_RE.exec(content)) !== null) {
-    const from = m.index;
-    const to = from + m[0].length;
-    const highlightText = m[1];
-    const allBlocks = m[2];
-
+  const ignored: Array<{ from: number; to: number }> = [];
+  const literalNodes = new Set(['FencedCode', 'CodeBlock', 'InlineCode', 'CommentBlock', 'Comment', 'HTMLBlock']);
+  // Comment bodies are an atomic extension to Markdown. Mask every code unit,
+  // including internal line breaks, so their fences/HTML/metadata cannot alter
+  // the surrounding document syntax; offsets into the real source stay exact.
+  const prose = content.replace(new RegExp(FULL_RE.source, 'g'), (full, quote, blocks) =>
+    full.slice(0, full.length - blocks.length) + 'x'.repeat(blocks.length));
+  markdownParser.parse(prose).iterate({ enter(node) {
+    if (literalNodes.has(node.name)) { ignored.push({ from: node.from, to: node.to }); return false; }
+  } });
+  const frontmatter = content.match(/^---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)(?:\r?\n|$)/);
+  if (frontmatter) ignored.push({ from: 0, to: frontmatter[0].length });
+  ignored.sort((a, b) => a.from - b.from);
+  let range = 0;
+  const matcher = new RegExp(FULL_RE.source, 'g');
+  for (const m of content.matchAll(matcher)) {
+    const from = m.index!;
+    while (range < ignored.length && ignored[range].to <= from) range++;
+    if (range < ignored.length && ignored[range].from <= from) continue;
+    let slashes = 0;
+    for (let i = from - 1; i >= 0 && content[i] === '\\'; i--) slashes++;
+    if (slashes % 2) continue;
     const comments: CommentEntry[] = [];
-    let bm: RegExpExecArray | null;
-    BLOCK_RE.lastIndex = 0;
-    while ((bm = BLOCK_RE.exec(allBlocks)) !== null) {
-      comments.push(parseMeta(bm[1]));
-    }
-
-    results.push({
-      id: `ann-${from}`,
-      highlightText,
-      comments,
-      from,
-      to,
-    });
+    for (const block of m[2].matchAll(new RegExp(BLOCK_RE.source, 'g'))) comments.push(parseMeta(block[1]));
+    results.push({ id: `ann-${from}`, highlightText: m[1], comments, from, to: from + m[0].length });
   }
 
   return results;
@@ -94,17 +85,9 @@ export function appendReply(
   annotationFrom: number,
   reply: CommentEntry,
 ): string {
-  // Re-find the annotation at the given position
-  FULL_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = FULL_RE.exec(content)) !== null) {
-    if (m.index === annotationFrom) {
-      const insertPos = m.index + m[0].length;
-      const block = commentBlock(reply);
-      return content.slice(0, insertPos) + block + content.slice(insertPos);
-    }
-  }
-  return content; // annotation not found, return unchanged
+  const ann = parseAnnotations(content).find(a => a.from === annotationFrom);
+  if (!ann) return content;
+  return content.slice(0, ann.to) + commentBlock(reply) + content.slice(ann.to);
 }
 
 /** Escape `<<` and `>>` inside a comment body to prevent parser confusion */
@@ -115,7 +98,8 @@ function escapeBody(text: string): string {
 function commentBlock(c: CommentEntry): string {
   const receipt = c.replyId && /^[a-f0-9]{40}$/.test(c.replyId)
     ? `\n<!-- ilc-codex:${c.replyId} -->` : '';
-  return `{>>${c.author}|${c.date}|${c.type}: ${escapeBody(c.text)}${receipt}<<}`;
+  const identity = c.commentId ? `\n<!-- ilc-comment:${c.commentId} -->` : '';
+  return `{>>${c.author}|${c.date}|${c.type}: ${escapeBody(c.text)}${identity}${receipt}<<}`;
 }
 
 /**
@@ -281,8 +265,18 @@ export function applySuggestion(content: string, annotationFrom: number, entryIn
     if (!raw) return null;
     const meta = parseMeta(raw.slice(3, -3));
     if (meta.type !== 'suggest' || !meta.text) return null;
-    blocks[entryIndex] = `{>>${meta.author}|${meta.date}|accepted: ${escapeBody(meta.text)}<<}`;
+    blocks[entryIndex] = commentBlock({ ...meta, type: 'accepted' });
     return { highlight: meta.text, blocks };
   });
   return out ?? content;
+}
+
+
+/** Add metadata without normalizing any existing user text. */
+export function identifyComment(content: string, ann: Annotation, index: number, id: string): string {
+  const start = ann.from + 3 + ann.highlightText.length + 3;
+  let current = 0;
+  const blocks = content.slice(start, ann.to).replace(/\{>>[\s\S]+?<<\}/g, block =>
+    current++ === index ? block.slice(0, -3) + `\n<!-- ilc-comment:${id} -->` + block.slice(-3) : block);
+  return content.slice(0, start) + blocks + content.slice(ann.to);
 }
